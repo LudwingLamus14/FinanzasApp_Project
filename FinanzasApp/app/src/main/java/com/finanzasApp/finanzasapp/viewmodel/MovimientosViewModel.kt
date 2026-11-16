@@ -1,6 +1,7 @@
 package com.finanzasApp.finanzasapp.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.finanzasApp.finanzasapp.data.model.Categoria
 import com.finanzasApp.finanzasapp.data.model.Movimiento
@@ -31,9 +32,9 @@ data class MovimientosUiState(
             filtroDesdeTexto.isNotBlank() || filtroHastaTexto.isNotBlank()
 }
 
-class MovimientosViewModel : ViewModel() {
+class MovimientosViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = FinanzasRepository()
+    private val repository = FinanzasRepository(application)
 
     private val _uiState = MutableStateFlow(MovimientosUiState())
     val uiState: StateFlow<MovimientosUiState> = _uiState.asStateFlow()
@@ -83,7 +84,7 @@ class MovimientosViewModel : ViewModel() {
         }
     }
 
-    // ---- Filtros: cada cambio vuelve a pedir la lista al backend ----
+    // ---- Filtros: cada cambio vuelve a pedir la lista a SQLite ----
 
     fun cambiarFiltroTipo(tipo: TipoMovimiento?) {
         _uiState.update { it.copy(filtroTipo = tipo) }
@@ -97,7 +98,7 @@ class MovimientosViewModel : ViewModel() {
 
     /**
      * Mientras el texto no forma una fecha completa (dd/MM/aaaa) todavia, solo
-     * se guarda lo escrito y NO se recarga (para no consultar la API con una
+     * se guarda lo escrito y NO se recarga (para no consultar la base local con una
      * fecha a medio escribir, como "15/0"). En cuanto el texto SI es una fecha
      * valida completa, se aplica de inmediato, igual que Tipo y Categoria.
      * Si se borra el campo (texto vacio), tambien se recarga, para quitar ese filtro.

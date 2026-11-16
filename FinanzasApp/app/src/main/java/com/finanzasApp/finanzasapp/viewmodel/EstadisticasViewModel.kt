@@ -1,6 +1,7 @@
 package com.finanzasApp.finanzasapp.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.finanzasApp.finanzasapp.data.model.Estadisticas
 import com.finanzasApp.finanzasapp.data.model.Periodo
@@ -26,9 +27,9 @@ data class EstadisticasUiState(
     val esHoy: Boolean get() = fechaTexto == Formato.hoy()
 }
 
-class EstadisticasViewModel : ViewModel() {
+class EstadisticasViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = FinanzasRepository()
+    private val repository = FinanzasRepository(application)
 
     private val _uiState = MutableStateFlow(EstadisticasUiState())
     val uiState: StateFlow<EstadisticasUiState> = _uiState.asStateFlow()
@@ -43,7 +44,7 @@ class EstadisticasViewModel : ViewModel() {
     /**
      * El usuario escribe directamente en el campo de fecha. Mientras el texto
      * no sea todavia una fecha completa (dd/MM/aaaa) no se recarga, para no
-     * consultar la API con una fecha a medio escribir; en cuanto SI lo es, se
+     * consultar la base local con una fecha a medio escribir; en cuanto SI lo es, se
      * aplica sola (el boton "Ver" queda solo como respaldo, no es obligatorio).
      */
     fun cambiarFechaTexto(texto: String) {
@@ -89,7 +90,7 @@ class EstadisticasViewModel : ViewModel() {
         val estado = _uiState.value
         val fecha = Formato.parseFecha(estado.fechaTexto)
         if (fecha == null) {
-            // No hay una fecha valida: no se consulta la API, solo se avisa.
+            // No hay una fecha valida: no se consulta la base local, solo se avisa.
             _uiState.update {
                 it.copy(cargando = false, errorFecha = "Fecha inválida. Usa el formato dd/MM/aaaa.")
             }

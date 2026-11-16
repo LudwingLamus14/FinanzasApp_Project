@@ -1,6 +1,7 @@
 package com.finanzasApp.finanzasapp.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.finanzasApp.finanzasapp.data.model.Movimiento
 import com.finanzasApp.finanzasapp.data.model.Resumen
@@ -20,9 +21,9 @@ data class DashboardUiState(
     val error: String? = null
 )
 
-class DashboardViewModel : ViewModel() {
+class DashboardViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = FinanzasRepository()
+    private val repository = FinanzasRepository(application)
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()

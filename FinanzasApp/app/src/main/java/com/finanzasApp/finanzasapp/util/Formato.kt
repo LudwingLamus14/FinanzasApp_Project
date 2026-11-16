@@ -31,7 +31,7 @@ object Formato {
         return signo + moneda(monto.abs())
     }
 
-    /** "2026-09-19" (formato del backend) -> "19/09/2026" */
+    /** "2026-09-19" (formato ISO almacenado) -> "19/09/2026" */
     fun fecha(iso: String): String =
         try {
             LocalDate.parse(iso).format(formatoFecha)

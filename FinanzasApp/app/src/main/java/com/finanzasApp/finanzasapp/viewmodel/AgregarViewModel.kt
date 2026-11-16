@@ -1,6 +1,7 @@
 package com.finanzasApp.finanzasapp.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.finanzasApp.finanzasapp.data.model.Categoria
 import com.finanzasApp.finanzasapp.data.model.MovimientoRequest
@@ -32,14 +33,14 @@ data class AgregarUiState(
     val errorFecha: String? = null,
     val errorGeneral: String? = null
 ) {
-    /** Solo se ofrecen las categorias del tipo elegido (el backend lo exige). */
+    /** Solo se ofrecen las categorias del tipo elegido (la categoría debe coincidir). */
     val categoriasDelTipo: List<Categoria>
         get() = categorias.filter { it.tipo == tipo }
 }
 
-class AgregarViewModel : ViewModel() {
+class AgregarViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = FinanzasRepository()
+    private val repository = FinanzasRepository(application)
 
     private val _uiState = MutableStateFlow(AgregarUiState())
     val uiState: StateFlow<AgregarUiState> = _uiState.asStateFlow()
@@ -118,7 +119,7 @@ class AgregarViewModel : ViewModel() {
             return
         }
 
-        // ---- Envio al backend ----
+        // ---- Guardado en SQLite ----
         _uiState.update {
             it.copy(
                 guardando = true,

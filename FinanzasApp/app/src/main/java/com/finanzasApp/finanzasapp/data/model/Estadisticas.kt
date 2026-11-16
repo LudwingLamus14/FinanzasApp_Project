@@ -2,7 +2,7 @@ package com.finanzasApp.finanzasapp.data.model
 
 import java.math.BigDecimal
 
-/** GET /api/estadisticas?periodo=... */
+/** Datos almacenados o calculados localmente. */
 data class Estadisticas(
     val periodo: String,
     val fechaInicio: String,

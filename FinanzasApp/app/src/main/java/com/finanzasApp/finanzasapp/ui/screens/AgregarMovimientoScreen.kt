@@ -45,7 +45,7 @@ fun AgregarMovimientoScreen(
 ) {
     val estado by viewModel.uiState.collectAsState()
 
-    // Cuando el backend confirma el guardado, se regresa al Dashboard
+    // Cuando SQLite confirma el guardado, se regresa al Dashboard
     LaunchedEffect(estado.guardado) {
         if (estado.guardado) onVolver()
     }
@@ -170,7 +170,7 @@ fun AgregarMovimientoScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // ---- Error general (red, servidor) ----
+            // ---- Error general (almacenamiento local) ----
             estado.errorGeneral?.let { mensaje ->
                 MensajeError(
                     mensaje = mensaje,

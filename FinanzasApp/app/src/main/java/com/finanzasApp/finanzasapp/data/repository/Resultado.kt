@@ -1,7 +1,7 @@
 package com.finanzasApp.finanzasapp.data.repository
 
 /**
- * Resultado de una operacion de red: o salio bien (Exito) o fallo (Error)
+ * Resultado de una operacion de almacenamiento local: o salio bien (Exito) o fallo (Error)
  * con un mensaje listo para mostrar al usuario.
  */
 sealed interface Resultado<out T> {

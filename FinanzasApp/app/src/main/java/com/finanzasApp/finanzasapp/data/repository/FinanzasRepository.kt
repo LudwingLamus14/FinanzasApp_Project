@@ -1,106 +1,79 @@
 package com.finanzasApp.finanzasapp.data.repository
 
-import com.finanzasApp.finanzasapp.data.model.Categoria
-import com.finanzasApp.finanzasapp.data.model.Estadisticas
-import com.finanzasApp.finanzasapp.data.model.ErrorResponse
-import com.finanzasApp.finanzasapp.data.model.Movimiento
-import com.finanzasApp.finanzasapp.data.model.MovimientoRequest
-import com.finanzasApp.finanzasapp.data.model.Periodo
-import com.finanzasApp.finanzasapp.data.model.Resumen
-import com.finanzasApp.finanzasapp.data.model.TipoMovimiento
-import com.finanzasApp.finanzasapp.data.remote.FinanzasApi
-import com.finanzasApp.finanzasapp.data.remote.RetrofitClient
-import com.google.gson.Gson
-import retrofit2.HttpException
-import java.io.IOException
-import java.net.SocketTimeoutException
+import android.content.Context
+import com.finanzasApp.finanzasapp.data.local.DatabaseHelper
+import com.finanzasApp.finanzasapp.data.model.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.math.BigDecimal
+import java.math.RoundingMode
+import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import kotlin.coroutines.cancellation.CancellationException
 
-/**
- * Intermediario entre los ViewModels y la API. Nunca lanza excepciones:
- * siempre devuelve Resultado.Exito o Resultado.Error con un mensaje comprensible.
- */
-class FinanzasRepository(
-    private val api: FinanzasApi = RetrofitClient.api
-) {
+/** Acceso local a SQLite fuera del hilo de interfaz; no necesita servidor ni conexión. */
+class FinanzasRepository(private val database: DatabaseHelper) {
+    constructor(context: Context) : this(DatabaseHelper.getInstance(context))
 
-    suspend fun obtenerResumen(): Resultado<Resumen> =
-        llamar("No se pudo cargar el resumen.") { api.obtenerResumen() }
+    suspend fun obtenerResumen(): Resultado<Resumen> = ejecutar("No se pudo cargar el resumen.") {
+        val movimientos = database.obtenerMovimientos()
+        val ingresos = sumar(movimientos, TipoMovimiento.INGRESO)
+        val gastos = sumar(movimientos, TipoMovimiento.GASTO)
+        Resumen(ingresos, gastos, ingresos - gastos)
+    }
 
-    /**
-     * Los 4 filtros son opcionales (null = "no filtrar por esto"); el backend
-     * los aplica el mismo. Se filtra en el servidor, no en el telefono.
-     */
     suspend fun obtenerMovimientos(
-        tipo: TipoMovimiento? = null,
-        categoriaId: Long? = null,
-        fechaInicio: LocalDate? = null,
-        fechaFin: LocalDate? = null
-    ): Resultado<List<Movimiento>> =
-        llamar("No se pudieron cargar los movimientos.") {
-            api.obtenerMovimientos(
-                tipo = tipo?.name,
-                categoriaId = categoriaId,
-                fechaInicio = fechaInicio?.toString(), // LocalDate.toString() = "yyyy-MM-dd"
-                fechaFin = fechaFin?.toString()
-            )
-        }
+        tipo: TipoMovimiento? = null, categoriaId: Long? = null,
+        fechaInicio: LocalDate? = null, fechaFin: LocalDate? = null
+    ): Resultado<List<Movimiento>> = ejecutar("No se pudieron cargar los movimientos.") {
+        database.obtenerMovimientos(tipo, categoriaId, fechaInicio, fechaFin)
+    }
 
     suspend fun obtenerCategorias(): Resultado<List<Categoria>> =
-        llamar("No se pudieron cargar las categorías.") { api.obtenerCategorias() }
-
-    /** "fecha" es cualquier dia dentro del periodo que se quiere ver; null = hoy. */
-    suspend fun obtenerEstadisticas(periodo: Periodo, fecha: LocalDate? = null): Resultado<Estadisticas> =
-        llamar("No se pudieron cargar las estadísticas.") {
-            api.obtenerEstadisticas(periodo.name, fecha?.toString())
-        }
+        ejecutar("No se pudieron cargar las categorías.") { database.obtenerCategorias() }
 
     suspend fun crearMovimiento(request: MovimientoRequest): Resultado<Movimiento> =
-        llamar("No se pudo guardar el movimiento.") { api.crearMovimiento(request) }
+        ejecutar("No se pudo guardar el movimiento.") { database.crearMovimiento(request) }
 
     suspend fun eliminarMovimiento(id: Long): Resultado<Unit> =
-        llamar("No se pudo eliminar el movimiento.") {
-            val respuesta = api.eliminarMovimiento(id)
-            // Con Response<Unit> Retrofit no lanza excepcion en 4xx/5xx: la lanzamos nosotros.
-            if (!respuesta.isSuccessful) throw HttpException(respuesta)
+        ejecutar("No se pudo eliminar el movimiento.") { database.eliminarMovimiento(id) }
+
+    suspend fun obtenerEstadisticas(periodo: Periodo, fecha: LocalDate? = null): Resultado<Estadisticas> =
+        ejecutar("No se pudieron cargar las estadísticas.") {
+            val dia = fecha ?: LocalDate.now()
+            val inicio = when (periodo) {
+                Periodo.DIA -> dia
+                Periodo.SEMANA -> dia.with(DayOfWeek.MONDAY)
+                Periodo.MES -> dia.withDayOfMonth(1)
+                Periodo.ANIO -> dia.withDayOfYear(1)
+            }
+            val fin = when (periodo) {
+                Periodo.DIA -> inicio
+                Periodo.SEMANA -> inicio.plusDays(6)
+                Periodo.MES -> inicio.plusMonths(1).minusDays(1)
+                Periodo.ANIO -> inicio.plusYears(1).minusDays(1)
+            }
+            val movimientos = database.obtenerMovimientos(fechaInicio = inicio, fechaFin = fin)
+            val gastos = sumar(movimientos, TipoMovimiento.GASTO)
+            val porCategoria = movimientos.filter { it.tipo == TipoMovimiento.GASTO }
+                .groupBy { it.categoriaId }.map { (id, registros) ->
+                    CategoriaGasto(id, registros.first().categoriaNombre, sumar(registros, TipoMovimiento.GASTO))
+                }.sortedWith(compareByDescending<CategoriaGasto> { it.total }.thenBy { it.categoriaId })
+            Estadisticas(periodo.name, inicio.toString(), fin.toString(),
+                sumar(movimientos, TipoMovimiento.INGRESO), gastos,
+                gastos.divide(BigDecimal.valueOf(ChronoUnit.DAYS.between(inicio, fin) + 1), 2, RoundingMode.HALF_UP),
+                porCategoria, porCategoria.firstOrNull())
         }
 
-    /** Ejecuta la llamada y traduce cualquier fallo a un mensaje para el usuario. */
-    private suspend fun <T> llamar(
-        mensajePorDefecto: String,
-        bloque: suspend () -> T
-    ): Resultado<T> {
-        return try {
-            Resultado.Exito(bloque())
-        } catch (e: CancellationException) {
-            throw e // Una corrutina cancelada no es un error: se debe propagar
-        } catch (e: SocketTimeoutException) {
-            Resultado.Error("El servidor tardó demasiado en responder. Intenta de nuevo.")
-        } catch (e: IOException) {
-            Resultado.Error(
-                "No se pudo conectar con el servidor. " +
-                    "Verifica que el backend esté encendido y que la URL sea correcta."
-            )
-        } catch (e: HttpException) {
-            Resultado.Error(mensajeDeHttp(e))
-        } catch (e: Exception) {
-            Resultado.Error(mensajePorDefecto)
-        }
-    }
+    private fun sumar(movimientos: List<Movimiento>, tipo: TipoMovimiento): BigDecimal =
+        movimientos.filter { it.tipo == tipo }.fold(BigDecimal("0.00")) { suma, m -> suma + m.monto }
 
-    /** Usa el mensaje que envia el backend; si no hay, uno generico segun el codigo HTTP. */
-    private fun mensajeDeHttp(e: HttpException): String {
-        val mensajeDelServidor = try {
-            val cuerpo = e.response()?.errorBody()?.string()
-            Gson().fromJson(cuerpo, ErrorResponse::class.java)?.mensaje
-        } catch (_: Exception) {
-            null
+    private suspend fun <T> ejecutar(mensaje: String, bloque: () -> T): Resultado<T> =
+        withContext(Dispatchers.IO) {
+            try { Resultado.Exito(bloque()) }
+            catch (e: CancellationException) { throw e }
+            catch (e: IllegalArgumentException) { Resultado.Error(e.message ?: mensaje) }
+            catch (_: Exception) { Resultado.Error(mensaje) }
         }
-        return mensajeDelServidor ?: when (e.code()) {
-            404 -> "El elemento no existe (quizá ya fue eliminado)."
-            in 400..499 -> "La solicitud no es válida (código ${e.code()})."
-            else -> "El servidor tuvo un problema (código ${e.code()}). Intenta más tarde."
-        }
-    }
 }

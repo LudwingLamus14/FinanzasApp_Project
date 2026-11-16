@@ -2,7 +2,7 @@ package com.finanzasApp.finanzasapp.data.model
 
 import java.math.BigDecimal
 
-/** Cuerpo del POST /api/movimientos. */
+/** Datos para guardar un movimiento local. */
 data class MovimientoRequest(
     val tipo: TipoMovimiento,
     val descripcion: String,

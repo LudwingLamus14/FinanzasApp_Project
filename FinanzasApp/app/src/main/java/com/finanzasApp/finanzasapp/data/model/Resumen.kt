@@ -2,7 +2,7 @@ package com.finanzasApp.finanzasapp.data.model
 
 import java.math.BigDecimal
 
-/** GET /api/resumen */
+/** Datos almacenados o calculados localmente. */
 data class Resumen(
     val totalIngresos: BigDecimal,
     val totalGastos: BigDecimal,

@@ -3,7 +3,7 @@ package com.finanzasApp.finanzasapp.data.model
 import java.math.BigDecimal
 
 /**
- * GET /api/movimientos
+ * Movimiento guardado en SQLite
  * - monto: BigDecimal (nunca Double) para no perder precision con el dinero.
  * - fecha: llega como texto "yyyy-MM-dd"; se formatea al mostrarla.
  */
