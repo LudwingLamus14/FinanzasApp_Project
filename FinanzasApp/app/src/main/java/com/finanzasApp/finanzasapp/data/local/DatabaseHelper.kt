@@ -93,7 +93,12 @@ class DatabaseHelper(context: Context, name: String = "finanzas.db") :
         }
     }
 
-    fun crearMovimiento(request: MovimientoRequest): Movimiento {
+    fun crearMovimiento(request: MovimientoRequest): Movimiento = escribirMovimiento(request)
+
+    fun actualizarMovimiento(id: Long, request: MovimientoRequest): Movimiento =
+        escribirMovimiento(request, id)
+
+    private fun escribirMovimiento(request: MovimientoRequest, id: Long? = null): Movimiento {
         require(request.descripcion.trim().length in 1..200) { "La descripción debe tener entre 1 y 200 caracteres." }
         require(request.monto > BigDecimal.ZERO && request.monto < BigDecimal("1000000000000")) {
             "El monto debe ser positivo y tener como máximo 12 cifras enteras."
@@ -105,14 +110,22 @@ class DatabaseHelper(context: Context, name: String = "finanzas.db") :
         val categoria = obtenerCategorias().find { it.id == request.categoriaId }
         require(categoria != null) { "La categoría no existe." }
         require(categoria.tipo == request.tipo) { "La categoría no corresponde al tipo de movimiento." }
-        val id = writableDatabase.insertOrThrow("movimientos", null, ContentValues().apply {
+        val valores = ContentValues().apply {
             put("tipo", request.tipo.name)
             put("descripcion", request.descripcion.trim())
             put("monto_centavos", centavos)
             put("fecha", fecha.toString())
             put("categoria_id", request.categoriaId)
-        })
-        return Movimiento(id, request.tipo, request.descripcion.trim(), BigDecimal.valueOf(centavos, 2),
+        }
+        val idGuardado = if (id == null) {
+            writableDatabase.insertOrThrow("movimientos", null, valores)
+        } else {
+            require(writableDatabase.update("movimientos", valores, "id = ?", arrayOf(id.toString())) == 1) {
+                "El movimiento no existe (quizá ya fue eliminado)."
+            }
+            id
+        }
+        return Movimiento(idGuardado, request.tipo, request.descripcion.trim(), BigDecimal.valueOf(centavos, 2),
             fecha.toString(), categoria.id, categoria.nombre)
     }
 

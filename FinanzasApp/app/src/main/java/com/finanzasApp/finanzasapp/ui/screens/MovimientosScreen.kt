@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
@@ -34,6 +33,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.finanzasApp.finanzasapp.data.model.Movimiento
 import com.finanzasApp.finanzasapp.data.model.TipoMovimiento
 import com.finanzasApp.finanzasapp.ui.components.CampoFecha
+import com.finanzasApp.finanzasapp.ui.components.ConfirmarEliminarMovimiento
 import com.finanzasApp.finanzasapp.ui.components.ItemMovimiento
 import com.finanzasApp.finanzasapp.ui.components.MensajeError
 import com.finanzasApp.finanzasapp.ui.components.SelectorCategoria
@@ -45,6 +45,7 @@ import com.finanzasApp.finanzasapp.viewmodel.MovimientosViewModel
 @Composable
 fun MovimientosScreen(
     onVolver: () -> Unit,
+    onEditar: (Long) -> Unit,
     viewModel: MovimientosViewModel = viewModel()
 ) {
     val estado by viewModel.uiState.collectAsState()
@@ -55,25 +56,13 @@ fun MovimientosScreen(
         viewModel.cargar()
     }
 
-    // Confirmacion antes de borrar (accion que no se puede deshacer)
     pendienteDeEliminar?.let { movimiento ->
-        AlertDialog(
-            onDismissRequest = { pendienteDeEliminar = null },
-            title = { Text("Eliminar movimiento") },
-            text = {
-                Text(
-                    "¿Eliminar «${movimiento.descripcion}» por " +
-                        "${Formato.moneda(movimiento.monto)}? Esta acción no se puede deshacer."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.eliminar(movimiento.id)
-                    pendienteDeEliminar = null
-                }) { Text("Eliminar") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendienteDeEliminar = null }) { Text("Cancelar") }
+        ConfirmarEliminarMovimiento(
+            movimiento = movimiento,
+            onCancelar = { pendienteDeEliminar = null },
+            onEliminar = {
+                viewModel.eliminar(movimiento.id)
+                pendienteDeEliminar = null
             }
         )
     }
@@ -126,6 +115,7 @@ fun MovimientosScreen(
             items(estado.movimientos, key = { it.id }) { movimiento ->
                 ItemMovimiento(
                     movimiento = movimiento,
+                    onEditar = { onEditar(movimiento.id) },
                     onEliminar = { pendienteDeEliminar = movimiento }
                 )
             }

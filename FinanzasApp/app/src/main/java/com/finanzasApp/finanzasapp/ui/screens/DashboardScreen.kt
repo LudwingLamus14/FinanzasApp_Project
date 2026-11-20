@@ -34,6 +34,7 @@ fun DashboardScreen(
     onAgregar: () -> Unit,
     onVerTodos: () -> Unit,
     onEstadisticas: () -> Unit,
+    onEditar: (Long) -> Unit,
     viewModel: DashboardViewModel = viewModel()
 ) {
     val estado by viewModel.uiState.collectAsState()
@@ -84,7 +85,7 @@ fun DashboardScreen(
             }
 
             items(estado.recientes, key = { it.id }) { movimiento ->
-                ItemMovimiento(movimiento = movimiento)
+                ItemMovimiento(movimiento = movimiento, onEditar = { onEditar(movimiento.id) })
             }
 
         }

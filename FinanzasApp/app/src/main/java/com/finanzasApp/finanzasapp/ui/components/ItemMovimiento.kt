@@ -25,6 +25,7 @@ import com.finanzasApp.finanzasapp.util.Formato
 fun ItemMovimiento(
     movimiento: Movimiento,
     modifier: Modifier = Modifier,
+    onEditar: () -> Unit,
     onEliminar: (() -> Unit)? = null
 ) {
     val colorMonto =
@@ -54,6 +55,7 @@ fun ItemMovimiento(
                     fontWeight = FontWeight.Bold,
                     color = colorMonto
                 )
+                TextButton(onClick = onEditar) { Text("Editar") }
                 if (onEliminar != null) {
                     TextButton(onClick = onEliminar) {
                         Text(text = "Eliminar", color = MaterialTheme.colorScheme.error)

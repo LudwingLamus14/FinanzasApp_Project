@@ -30,11 +30,21 @@ class FinanzasRepository(private val database: DatabaseHelper) {
         database.obtenerMovimientos(tipo, categoriaId, fechaInicio, fechaFin)
     }
 
+    suspend fun obtenerMovimiento(id: Long): Resultado<Movimiento> =
+        ejecutar("No se pudo cargar el movimiento.") {
+            requireNotNull(database.obtenerMovimientos(id = id).singleOrNull()) {
+                "El movimiento no existe (quizá ya fue eliminado)."
+            }
+        }
+
     suspend fun obtenerCategorias(): Resultado<List<Categoria>> =
         ejecutar("No se pudieron cargar las categorías.") { database.obtenerCategorias() }
 
     suspend fun crearMovimiento(request: MovimientoRequest): Resultado<Movimiento> =
         ejecutar("No se pudo guardar el movimiento.") { database.crearMovimiento(request) }
+
+    suspend fun actualizarMovimiento(id: Long, request: MovimientoRequest): Resultado<Movimiento> =
+        ejecutar("No se pudo guardar el movimiento.") { database.actualizarMovimiento(id, request) }
 
     suspend fun eliminarMovimiento(id: Long): Resultado<Unit> =
         ejecutar("No se pudo eliminar el movimiento.") { database.eliminarMovimiento(id) }

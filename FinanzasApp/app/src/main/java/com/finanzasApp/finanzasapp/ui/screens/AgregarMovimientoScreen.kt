@@ -1,5 +1,6 @@
 package com.finanzasApp.finanzasapp.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,12 +25,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.finanzasApp.finanzasapp.data.model.TipoMovimiento
 import com.finanzasApp.finanzasapp.ui.components.CampoFecha
+import com.finanzasApp.finanzasapp.ui.components.ConfirmarEliminarMovimiento
 import com.finanzasApp.finanzasapp.ui.components.MensajeError
 import com.finanzasApp.finanzasapp.ui.components.SelectorCategoria
 import com.finanzasApp.finanzasapp.viewmodel.AgregarViewModel
@@ -42,16 +47,33 @@ fun AgregarMovimientoScreen(
 ) {
     val estado by viewModel.uiState.collectAsState()
 
-    // Cuando SQLite confirma el guardado, se regresa al Dashboard
-    LaunchedEffect(estado.guardado) {
-        if (estado.guardado) onVolver()
+    val editando = viewModel.movimientoId != null
+    var confirmarEliminacion by rememberSaveable { mutableStateOf(false) }
+
+    BackHandler(enabled = estado.ocupado) {}
+    LaunchedEffect(estado.finalizado) {
+        if (estado.finalizado) onVolver()
+    }
+
+    val original = estado.movimientoOriginal
+    if (confirmarEliminacion && original != null && !estado.ocupado) {
+        ConfirmarEliminarMovimiento(
+            movimiento = original,
+            onCancelar = { confirmarEliminacion = false },
+            onEliminar = {
+                confirmarEliminacion = false
+                viewModel.eliminar()
+            }
+        )
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Agregar movimiento") },
-                navigationIcon = { TextButton(onClick = onVolver) { Text("←") } }
+                title = { Text(if (editando) "Editar movimiento" else "Agregar movimiento") },
+                navigationIcon = {
+                    TextButton(onClick = onVolver, enabled = !estado.ocupado) { Text("←") }
+                }
             )
         }
     ) { padding ->
@@ -64,6 +86,17 @@ fun AgregarMovimientoScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (editando && original == null) {
+                if (estado.cargando) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                } else {
+                    estado.errorGeneral?.let { mensaje ->
+                        MensajeError(mensaje = mensaje, onReintentar = viewModel::cargarFormulario)
+                    }
+                }
+                return@Column
+            }
+
             // ---- Tipo ----
             Text(text = "Tipo", style = MaterialTheme.typography.labelLarge)
             Row(
@@ -95,20 +128,22 @@ fun AgregarMovimientoScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // ---- Monto (solo pesos enteros) ----
+            // ---- Monto ----
             OutlinedTextField(
                 value = estado.monto,
                 onValueChange = viewModel::cambiarMonto,
-                label = { Text("Monto (pesos, sin puntos ni comas)") },
+                label = {
+                    Text(if (editando) "Monto (pesos)" else "Monto (pesos, sin puntos ni comas)")
+                },
                 prefix = { Text("$ ") },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = KeyboardOptions(keyboardType = if (editando) KeyboardType.Decimal else KeyboardType.Number),
                 isError = estado.errorMonto != null,
                 supportingText = { estado.errorMonto?.let { Text(it) } },
                 modifier = Modifier.fillMaxWidth()
             )
 
-            if (estado.cargandoCategorias) {
+            if (estado.cargando) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             } else {
                 SelectorCategoria(
@@ -136,17 +171,30 @@ fun AgregarMovimientoScreen(
                 MensajeError(
                     mensaje = mensaje,
                     // Si fallo la carga de categorias, se ofrece reintentar
-                    onReintentar = if (estado.categorias.isEmpty()) viewModel::cargarCategorias else null
+                    onReintentar = if (estado.categorias.isEmpty()) viewModel::cargarFormulario else null
                 )
             }
 
             // ---- Guardar ----
             Button(
                 onClick = viewModel::guardar,
-                enabled = !estado.guardando,
+                enabled = !estado.ocupado && !estado.cargando && estado.categorias.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (estado.guardando) "Guardando…" else "Guardar")
+                Text(if (estado.guardando) "Guardando…" else if (editando) "Guardar cambios" else "Guardar")
+            }
+            if (editando) {
+                OutlinedButton(
+                    onClick = { confirmarEliminacion = true },
+                    enabled = !estado.ocupado && !estado.cargando,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        if (estado.eliminando) "Eliminando…" else "Eliminar movimiento",
+                        color = if (estado.ocupado) MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }

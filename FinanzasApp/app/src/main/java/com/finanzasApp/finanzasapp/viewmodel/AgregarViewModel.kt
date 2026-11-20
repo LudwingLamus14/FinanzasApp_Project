@@ -2,8 +2,10 @@ package com.finanzasApp.finanzasapp.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.finanzasApp.finanzasapp.data.model.Categoria
+import com.finanzasApp.finanzasapp.data.model.Movimiento
 import com.finanzasApp.finanzasapp.data.model.MovimientoRequest
 import com.finanzasApp.finanzasapp.data.model.TipoMovimiento
 import com.finanzasApp.finanzasapp.data.repository.FinanzasRepository
@@ -16,54 +18,86 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 
-/** Estado del formulario "Agregar movimiento". */
+/** Estado del formulario de movimientos. */
 data class AgregarUiState(
     val tipo: TipoMovimiento = TipoMovimiento.GASTO,   // siempre hay un tipo elegido
     val descripcion: String = "",
-    val monto: String = "",                            // solo digitos (pesos enteros)
+    val monto: String = "",
     val categoriaId: Long? = null,
     val fecha: String = Formato.hoy(),                 // dd/MM/yyyy
     val categorias: List<Categoria> = emptyList(),
-    val cargandoCategorias: Boolean = true,
+    val cargando: Boolean = true,
+    val movimientoOriginal: Movimiento? = null,
     val guardando: Boolean = false,
-    val guardado: Boolean = false,
+    val eliminando: Boolean = false,
+    val finalizado: Boolean = false,
     val errorDescripcion: String? = null,
     val errorMonto: String? = null,
     val errorCategoria: String? = null,
     val errorFecha: String? = null,
     val errorGeneral: String? = null
 ) {
+    val ocupado: Boolean get() = guardando || eliminando || finalizado
+
     /** Solo se ofrecen las categorias del tipo elegido (la categoría debe coincidir). */
     val categoriasDelTipo: List<Categoria>
         get() = categorias.filter { it.tipo == tipo }
 }
 
-class AgregarViewModel(application: Application) : AndroidViewModel(application) {
+class AgregarViewModel(
+    application: Application,
+    savedStateHandle: SavedStateHandle
+) : AndroidViewModel(application) {
 
+    val movimientoId = savedStateHandle.get<Long>("movimientoId")
+    private val formatoMontoEdicion = Regex("[0-9]{0,12}([.,][0-9]{0,2})?")
     private val repository = FinanzasRepository(application)
 
     private val _uiState = MutableStateFlow(AgregarUiState())
     val uiState: StateFlow<AgregarUiState> = _uiState.asStateFlow()
 
     init {
-        cargarCategorias()
+        cargarFormulario()
     }
 
-    fun cargarCategorias() {
+    fun cargarFormulario() {
         viewModelScope.launch {
-            _uiState.update { it.copy(cargandoCategorias = true, errorGeneral = null) }
+            _uiState.update { it.copy(cargando = true, errorGeneral = null) }
+            if (movimientoId != null && _uiState.value.movimientoOriginal == null) {
+                when (val resultado = repository.obtenerMovimiento(movimientoId)) {
+                    is Resultado.Error -> {
+                        _uiState.update { it.copy(cargando = false, errorGeneral = resultado.mensaje) }
+                        return@launch
+                    }
+                    is Resultado.Exito -> {
+                        val movimiento = resultado.datos
+                        _uiState.update {
+                            it.copy(
+                                movimientoOriginal = movimiento,
+                                tipo = movimiento.tipo,
+                                descripcion = movimiento.descripcion,
+                                monto = movimiento.monto.stripTrailingZeros().toPlainString(),
+                                categoriaId = movimiento.categoriaId,
+                                fecha = Formato.fecha(movimiento.fecha)
+                            )
+                        }
+                    }
+                }
+            }
             when (val resultado = repository.obtenerCategorias()) {
                 is Resultado.Exito ->
-                    _uiState.update { it.copy(cargandoCategorias = false, categorias = resultado.datos) }
+                    _uiState.update { it.copy(cargando = false, categorias = resultado.datos) }
                 is Resultado.Error ->
-                    _uiState.update { it.copy(cargandoCategorias = false, errorGeneral = resultado.mensaje) }
+                    _uiState.update { it.copy(cargando = false, errorGeneral = resultado.mensaje) }
             }
         }
     }
 
     fun cambiarTipo(tipo: TipoMovimiento) {
         // Al cambiar de tipo la categoria elegida ya no aplica
-        _uiState.update { it.copy(tipo = tipo, categoriaId = null, errorCategoria = null) }
+        _uiState.update {
+            if (it.tipo == tipo) it else it.copy(tipo = tipo, categoriaId = null, errorCategoria = null)
+        }
     }
 
     fun cambiarDescripcion(texto: String) {
@@ -71,9 +105,13 @@ class AgregarViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun cambiarMonto(texto: String) {
-        // Solo digitos: evita ambiguedades como "25.000" (miles) frente a "25.000" (decimal)
-        val soloDigitos = texto.filter { it.isDigit() }.take(12)
-        _uiState.update { it.copy(monto = soloDigitos, errorMonto = null) }
+        val monto = if (movimientoId == null) {
+            texto.filter { it.isDigit() }.take(12)
+        } else {
+            if (!formatoMontoEdicion.matches(texto)) return
+            texto
+        }
+        _uiState.update { it.copy(monto = monto, errorMonto = null) }
     }
 
     fun seleccionarCategoria(id: Long) {
@@ -86,10 +124,11 @@ class AgregarViewModel(application: Application) : AndroidViewModel(application)
 
     fun guardar() {
         val estado = _uiState.value
-        if (estado.guardando) return
+        if (estado.ocupado || estado.cargando || estado.categorias.isEmpty()) return
+        if (movimientoId != null && estado.movimientoOriginal == null) return
 
         // ---- Validaciones basicas ----
-        val monto: BigDecimal? = estado.monto.toBigDecimalOrNull()
+        val monto: BigDecimal? = estado.monto.replace(',', '.').toBigDecimalOrNull()
         val fecha = Formato.parseFecha(estado.fecha)
         val categoriaId = estado.categoriaId
 
@@ -140,11 +179,29 @@ class AgregarViewModel(application: Application) : AndroidViewModel(application)
         )
 
         viewModelScope.launch {
-            when (val resultado = repository.crearMovimiento(request)) {
+            val resultado = if (movimientoId == null) repository.crearMovimiento(request)
+                else repository.actualizarMovimiento(movimientoId, request)
+            when (resultado) {
                 is Resultado.Exito ->
-                    _uiState.update { it.copy(guardando = false, guardado = true) }
+                    _uiState.update { it.copy(guardando = false, finalizado = true) }
                 is Resultado.Error ->
                     _uiState.update { it.copy(guardando = false, errorGeneral = resultado.mensaje) }
+            }
+        }
+    }
+
+    fun eliminar() {
+        val id = movimientoId ?: return
+        val estado = _uiState.value
+        if (estado.ocupado || estado.cargando || estado.movimientoOriginal == null) return
+
+        _uiState.update { it.copy(eliminando = true, errorGeneral = null) }
+        viewModelScope.launch {
+            when (val resultado = repository.eliminarMovimiento(id)) {
+                is Resultado.Exito ->
+                    _uiState.update { it.copy(eliminando = false, finalizado = true) }
+                is Resultado.Error ->
+                    _uiState.update { it.copy(eliminando = false, errorGeneral = resultado.mensaje) }
             }
         }
     }

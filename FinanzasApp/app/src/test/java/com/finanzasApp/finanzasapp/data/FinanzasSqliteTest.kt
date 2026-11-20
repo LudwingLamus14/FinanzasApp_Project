@@ -67,6 +67,32 @@ class FinanzasSqliteTest {
         assertTrue(repository.eliminarMovimiento(m.id) is Resultado.Error)
     }
 
+    @Test fun editaTodosLosDatosSinDuplicarElMovimiento() = runBlocking {
+        val original = agregar(TipoMovimiento.GASTO, "0.10", "2024-02-29")
+        val ingreso = db.obtenerCategorias().first { it.tipo == TipoMovimiento.INGRESO }
+        val cambios = MovimientoRequest(
+            TipoMovimiento.INGRESO, "Descripción editada", BigDecimal("25.75"), ingreso.id, "2024-03-01"
+        )
+
+        val editado = exito(repository.actualizarMovimiento(original.id, cambios))
+        assertEquals(original.id, editado.id)
+        assertEquals(cambios.tipo, editado.tipo)
+        assertEquals(cambios.descripcion, editado.descripcion)
+        assertEquals(cambios.monto, editado.monto)
+        assertEquals(cambios.categoriaId, editado.categoriaId)
+        assertEquals(cambios.fecha, editado.fecha)
+        assertEquals(editado, exito(repository.obtenerMovimiento(original.id)))
+        assertEquals(listOf(editado), db.obtenerMovimientos())
+        assertEquals(BigDecimal("25.75"), exito(repository.obtenerResumen()).saldo)
+
+        assertTrue(repository.actualizarMovimiento(original.id, cambios.copy(tipo = original.tipo)) is Resultado.Error)
+        assertEquals(editado, exito(repository.obtenerMovimiento(original.id)))
+        exito(repository.eliminarMovimiento(original.id))
+        assertTrue(repository.obtenerMovimiento(original.id) is Resultado.Error)
+        assertTrue(repository.actualizarMovimiento(original.id, cambios) is Resultado.Error)
+        assertTrue(db.obtenerMovimientos().isEmpty())
+    }
+
     @Test fun filtraPorTipoCategoriaYFechasInclusivasEnOrdenDescendente() {
         agregar(TipoMovimiento.INGRESO, "100", "2024-03-01")
         agregar(TipoMovimiento.GASTO, "10", "2024-02-28")

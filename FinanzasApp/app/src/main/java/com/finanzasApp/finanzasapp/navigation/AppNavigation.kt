@@ -10,6 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -19,10 +21,10 @@ import com.finanzasApp.finanzasapp.ui.screens.DashboardScreen
 import com.finanzasApp.finanzasapp.ui.screens.EstadisticasScreen
 import com.finanzasApp.finanzasapp.ui.screens.MovimientosScreen
 
-/** Nombres de las 4 pantallas. */
 object Rutas {
     const val DASHBOARD = "dashboard"
     const val AGREGAR = "agregar"
+    const val EDITAR = "editar"
     const val MOVIMIENTOS = "movimientos"
     const val ESTADISTICAS = "estadisticas"
 }
@@ -45,7 +47,9 @@ fun AppNavigation() {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val rutaActual = backStackEntry?.destination?.route
 
-    // El menu inferior solo se muestra en las 3 pantallas principales, no en "Agregar".
+    val editarMovimiento: (Long) -> Unit = { id ->
+        navController.navigate("${Rutas.EDITAR}/$id") { launchSingleTop = true }
+    }
     val mostrarMenuInferior = pestanas.any { it.ruta == rutaActual }
 
     Scaffold(
@@ -84,14 +88,24 @@ fun AppNavigation() {
                 DashboardScreen(
                     onAgregar = { navController.navigate(Rutas.AGREGAR) },
                     onVerTodos = { navController.navigate(Rutas.MOVIMIENTOS) },
-                    onEstadisticas = { navController.navigate(Rutas.ESTADISTICAS) }
+                    onEstadisticas = { navController.navigate(Rutas.ESTADISTICAS) },
+                    onEditar = editarMovimiento
                 )
             }
             composable(Rutas.AGREGAR) {
                 AgregarMovimientoScreen(onVolver = { navController.popBackStack() })
             }
+            composable(
+                route = "${Rutas.EDITAR}/{movimientoId}",
+                arguments = listOf(navArgument("movimientoId") { type = NavType.LongType })
+            ) {
+                AgregarMovimientoScreen(onVolver = { navController.popBackStack() })
+            }
             composable(Rutas.MOVIMIENTOS) {
-                MovimientosScreen(onVolver = { navController.popBackStack() })
+                MovimientosScreen(
+                    onVolver = { navController.popBackStack() },
+                    onEditar = editarMovimiento
+                )
             }
             composable(Rutas.ESTADISTICAS) {
                 EstadisticasScreen(onVolver = { navController.popBackStack() })
