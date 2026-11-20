@@ -15,7 +15,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -34,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.finanzasApp.finanzasapp.data.model.CategoriaGasto
 import com.finanzasApp.finanzasapp.data.model.Periodo
+import com.finanzasApp.finanzasapp.ui.components.CampoFecha
 import com.finanzasApp.finanzasapp.ui.components.GraficoIngresosGastos
 import com.finanzasApp.finanzasapp.ui.components.MensajeError
 import com.finanzasApp.finanzasapp.util.Formato
@@ -225,14 +225,11 @@ private fun SelectorFecha(
             IconButton(onClick = onAnterior) {
                 Text("‹", style = MaterialTheme.typography.headlineSmall)
             }
-            OutlinedTextField(
-                value = fechaTexto,
-                onValueChange = onCambiarTexto,
-                label = { Text("Ver fecha") },
-                placeholder = { Text("dd/MM/aaaa") },
-                singleLine = true,
-                isError = errorFecha != null,
-                supportingText = { errorFecha?.let { Text(it) } },
+            CampoFecha(
+                valor = fechaTexto,
+                onCambiar = onCambiarTexto,
+                etiqueta = "Ver fecha",
+                error = errorFecha,
                 modifier = Modifier.weight(1f)
             )
             IconButton(onClick = onSiguiente) {

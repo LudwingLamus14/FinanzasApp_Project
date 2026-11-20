@@ -8,17 +8,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,14 +24,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.finanzasApp.finanzasapp.data.model.TipoMovimiento
+import com.finanzasApp.finanzasapp.ui.components.CampoFecha
 import com.finanzasApp.finanzasapp.ui.components.MensajeError
+import com.finanzasApp.finanzasapp.ui.components.SelectorCategoria
 import com.finanzasApp.finanzasapp.viewmodel.AgregarViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,62 +108,26 @@ fun AgregarMovimientoScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // ---- Categoria (solo las del tipo elegido) ----
-            // Agrupada en una tarjeta para que se distinga claramente del resto del formulario.
-            Text(text = "Categoría", style = MaterialTheme.typography.labelLarge)
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    if (estado.cargandoCategorias) {
-                        LinearProgressIndicator(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                        )
-                    } else if (estado.categoriasDelTipo.isEmpty()) {
-                        Text(
-                            text = "No hay categorías para este tipo.",
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    } else {
-                        estado.categoriasDelTipo.forEach { categoria ->
-                            val seleccionada = categoria.id == estado.categoriaId
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .selectable(
-                                        selected = seleccionada,
-                                        onClick = { viewModel.seleccionarCategoria(categoria.id) },
-                                        role = Role.RadioButton
-                                    )
-                                    .padding(horizontal = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(selected = seleccionada, onClick = null)
-                                Text(
-                                    text = categoria.nombre,
-                                    modifier = Modifier.padding(start = 8.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            estado.errorCategoria?.let { mensaje ->
-                Text(
-                    text = mensaje,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
+            if (estado.cargandoCategorias) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else {
+                SelectorCategoria(
+                    categorias = estado.categoriasDelTipo,
+                    categoriaId = estado.categoriaId,
+                    onSeleccionar = { id -> id?.let(viewModel::seleccionarCategoria) },
+                    error = estado.errorCategoria
                 )
+                if (estado.categoriasDelTipo.isEmpty()) {
+                    Text("No hay categorías para este tipo.")
+                }
             }
 
             // ---- Fecha ----
-            OutlinedTextField(
-                value = estado.fecha,
-                onValueChange = viewModel::cambiarFecha,
-                label = { Text("Fecha (dd/MM/aaaa)") },
-                singleLine = true,
-                isError = estado.errorFecha != null,
-                supportingText = { estado.errorFecha?.let { Text(it) } },
+            CampoFecha(
+                valor = estado.fecha,
+                onCambiar = viewModel::cambiarFecha,
+                etiqueta = "Fecha (dd/MM/aaaa)",
+                error = estado.errorFecha,
                 modifier = Modifier.fillMaxWidth()
             )
 
